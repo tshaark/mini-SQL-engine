@@ -56,11 +56,37 @@ class SqlEngine():
                         t.columns[cols].append(line[ind])
                         ind += 1
                     t.rows.append(line)
-                    # print(line)
+                    # print(t.columns['D'])
          
             finally:
                 file.close()        
 
+    def proCols(self,query):
+        pass
+    def procRows(self,query):
+        pass
+    def procAgg(self,query):
+        pass
+    def procDist(self,query):
+        pass
+    def procCond(self,query,idx):
+        pass
+
+
+
+class Query():
+    def __init__(self):
+        self.tables = []
+        self.cols = []
+        self.line = "select * from A"
+        self.flag = 1
+    def parse(self):
+        # line = line.strip()
+        # print('bt')
+        patt = ['select', 'from']
+        for p in patt:
+            if not re.search(p,self.line):
+                print('Error in syntax')
 
 
 class Tab():
@@ -79,5 +105,7 @@ class Tab():
 
 
 if __name__ == '__main__':
-    minisql = SqlEngine()
+    # minisql = SqlEngine()
     # minisql.engine()
+    hummahumma = Query()
+    hummahumma.parse()
