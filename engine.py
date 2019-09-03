@@ -2,11 +2,14 @@ import re
 import csv
 import sys
 from prettytable import PrettyTable
+from itertools import product
 
 class SqlEngine():
     def __init__(self):
         self.tables = []
         self.tabs = {}
+        self.outable=[]
+        self.outcols = []
         self.readMetadata()
         self.readTables()
 
@@ -61,7 +64,8 @@ class SqlEngine():
          
             finally:
                 file.close()        
-
+    def checkOpr(self,l,r,op):
+        pass
     def proCols(self,query):
         pass
     def procRows(self,query):
@@ -72,15 +76,43 @@ class SqlEngine():
         pass
     def procCond(self,query,idx):
         pass
-
+    def retrieveTables(self, table):
+        return self.tabs[table].rows        
+    def minisqlengine(self):
+        while 1:
+            q = input('miniSQLEngine>>')
+            if q == 'quit':
+                break
+            quer = q.split(';')
+            for i in range(len(quer)):
+                quer[i] = quer[i] + ';'
+                query = Query(quer[i])
+                flg = query.parse()
+                if flg == 0:
+                    continue
+                flag = 0    
+                for j in query.tables:
+                    if j not in self.tabs:
+                        flag = 1
+                        print('Table not found')
+                if flag == 1:
+                    continue
+                for j in product(*map(self.retrieveTables,query.tables)):
+                    self.outable.append(j)
+                # for t in self.outable:
+                #     print(t)    
+                for t in query.tables:
+                    self.outcols.append(self.tabs[t].attributes)  
+                # for t in self.outcols:
+                #     print(t)
 
 
 class Query():
-    def __init__(self):
+    def __init__(self,line):
         self.tables = []
         self.cols = []
         self.conds=[]
-        self.line = "select * from A where a=b or b=c" + ';'
+        self.line = line
         self.flag = 1
         self.conditions = []
     def parse(self):
@@ -167,7 +199,7 @@ class Tab():
 
 
 if __name__ == '__main__':
-    # minisql = SqlEngine()
-    # minisql.engine()
-    hummahumma = Query()
-    hummahumma.parse()
+    minisql = SqlEngine()
+    minisql.minisqlengine()
+    # hummahumma = Query()
+    # hummahumma.parse()
