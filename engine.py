@@ -1,6 +1,7 @@
 import re
 import csv
 import sys
+from prettytable import PrettyTable
 
 class SqlEngine():
     def __init__(self):
@@ -78,15 +79,76 @@ class Query():
     def __init__(self):
         self.tables = []
         self.cols = []
-        self.line = "select * from A"
+        self.conds=[]
+        self.line = "select * from A where a=b or b=c" + ';'
         self.flag = 1
+        self.conditions = []
     def parse(self):
-        # line = line.strip()
+        # line = line.strip() isko baad me uncomment karna hai
         # print('bt')
         patt = ['select', 'from']
         for p in patt:
-            if not re.search(p,self.line):
+            if not re.search(p,self.line,re.IGNORECASE):
                 print('Error in syntax')
+                return 0
+
+        
+        cond = re.search(r'(\where)[\ ]*$',self.line,re.IGNORECASE)
+        if cond:
+            print('Where condition is not provided')
+        
+        if re.search(r'(\ where\ )',self.line, re.IGNORECASE):
+            tables = re.sub(r'^(select\ ).+(\ from\ )(.+)(\ where\ )(.+)[;]$', r'\3' , self.line,flags = re.IGNORECASE)
+            tables = tables.split(',')
+            for t in tables:
+                self.tables.append(t.strip())
+
+            # conds = re.sub(r'^(select\ ).+(\ from\ )(.+)(\ where\ )(.+)[;]$', r'\4' , self.line,flags = re.IGNORECASE)
+            conds = re.sub(r'^(select\ ).+(\ from\ ).+(\ where\ )(.+)[;]$', r'\4' , self.line, flags = re.IGNORECASE)
+            conds = conds.strip()
+            # conds = conds.strip()
+            # print(conds)
+        
+            
+
+            if re.search(r'(\ or\ )',conds,re.IGNORECASE):
+                conds = re.sub(r'^(.+)(or)(.+)$', r'\1 or \3',conds,flags = re.IGNORECASE)
+                
+                # for con in conds:
+                #     print(con)
+                conds = conds.split('or')
+                for i in conds:
+                    i = i.strip()
+                    # print(i)
+                    self.conditions.append(i)
+                # for c in self.conditions:
+                #     print(c)    
+                return 3
+            
+            
+            elif re.search(r'(\ and\ )',conds,re.IGNORECASE):
+                conds = re.sub(r'^(.+)(and)(.+)$', r'\1 and \3',conds,flags = re.IGNORECASE)
+                conds = conds.split('and')
+                # print('baka')
+                for i in conds:
+                    i = i.strip()
+                    self.conditions.append(i)
+                # for c in self.conditions:
+                #     print(c)                  
+                return 4 
+            
+            else:
+                conds = conds.strip()
+                self.conditions.append(conds)
+                return 2
+        else:
+            tables = re.sub(r'^(select\ ).+(\ from\ )(.+)[;]$', r'\3' , self.line,flags = re.IGNORECASE)        
+            tables = tables.split(',')
+            for t in tables:
+                self.tables.append(t.strip())
+            return 1
+
+               
 
 
 class Tab():
