@@ -8,6 +8,7 @@ class SqlEngine():
     def __init__(self):
         self.tables = []
         self.tabs = {}
+        self.tn = {}
         self.outable=[]
         self.outcols = []
         self.readMetadata()
@@ -18,6 +19,7 @@ class SqlEngine():
     def readMetadata(self):
         file = open('./metadata.txt')
         try:
+            # print('baka')
             data = file.readlines()
             for i in range(len(data)):
                 if data[i].strip() == '<begin_table>':
@@ -47,6 +49,7 @@ class SqlEngine():
                     line = line.split(',')
                     ind = 0
                     # print(line[0])
+
                     for cols in t.attributes:
                         t.columns[cols] = []
 
@@ -58,26 +61,237 @@ class SqlEngine():
                         # print(line[ind])
                         # t.columns[cols].append(0)
                         t.columns[cols].append(line[ind])
+                        self.tabs[t.tableName].columns[cols].append(line[ind])
                         ind += 1
                     t.rows.append(line)
+                    self.tabs[t.tableName].rows.append(line)
+                    # t.num += 1
+                    self.tabs[t.tableName].num += 1
                     # print(t.columns['D'])
          
             finally:
                 file.close()        
-    def checkOpr(self,l,r,op):
-        pass
-    def proCols(self,query):
-        pass
+    
+    def proc(self,flag,query):
+        if flag == 1:
+            num = 1
+            for i in query.tables:
+                num *= self.tabs[i].num
+            idx = range(num)
+        elif flag == 2:
+            val = self.procCond(0, query)
+            if val > -1:
+                idx = val
+            else:
+                return    
+        else:
+            val1 = self.procCond(0, query)
+            val2 = self.procCond(1, query)
+            if val1 == -1:
+                return
+            elif val2 == -2:
+                return
+            if flag == 3:
+                rnge = (set(val1) | set(val2))
+                idx = list(rnge)
+            elif flag == 4:
+                rnge = (set(val1) & set(val2))
+                idx = list(rnge)    
+        self.id = idx                               
+        if any(re.match(r'(distinct)', string, re.IGNORECASE) for string in query.cols):
+            self.procDist(query)
+            return
+        elif any(re.match(r'.+\(.+\)', string) for string in query.cols):
+            self.procAgg(query)
+            return
+        else:
+            # print('baka')
+            self.procRows(query)    
+
+    def resolveOpr(self,l,r,opr):
+        if opr == '>':
+            return l > r
+        elif opr == '<':
+            return l < r
+        elif opr == '=':
+            return l == r
+        elif opr == '>=':
+            return l >= r
+        elif opr == '<=':
+            return l <= r
+    
     def procRows(self,query):
-        pass
+        prcsdCols = self.proCols(query)
+        if prcsdCols == -1:
+            return
+
+        ptable = PrettyTable(prcsdCols)
+        for i in self.id:
+            row = []
+            for cols in prcsdCols:
+                col = re.sub(r'(.+)\.(.+)', r'\2', cols)
+                tab = re.sub(r'(.+)\.(.+)', r'\1', cols)
+                if tab not in self.tabs:
+                    print('Table ' + tab + ' does not exist')
+                    return
+                if col not in self.tabs[tab].attributes:
+                    print('Column ' + col + ' does not exist')
+                    return
+                
+                cnt = 0
+                for j in self.tabls[tab].attributes:
+                    if j != col:
+                        cnt += 1
+                    else:
+                        break    
+                row.append(self.outable[i][self.tn[tab]][cnt])
+            ptable.add_row(row)
+        print(ptable)            
+
+
+
+    
+    def proCols(self,query):
+        prcsdCols = []
+        if '*' not in query.cols:
+            for cols in query.cols:
+                if not re.match(r'.+\..+', cols):
+                    count = 0
+                    for t in query.tables:
+                        if cols not in self.tabs[t].columns:
+                            continue
+                        tab = t
+                        prcsdCols.append(tab + '.' + cols)
+                        count += 1    
+                    if count == 0:
+                        print('Column ' + cols + ' does not exist' )
+                        return -1        
+                else:
+                    prcsdCols += cols
+        else:
+            query.cols = []
+            for t in query.tables:
+                prcsdCols.append([ t + '.' + x for x in self.tabs[t].attributes])
+        
+        return prcsdCols
+
     def procAgg(self,query):
         pass
     def procDist(self,query):
         pass
-    def procCond(self,query,idx):
-        pass
-    def retrieveTables(self, table):
+    
+    
+    def procCond(self, idx, query):
+        if not re.match(r'([^<>=]+)(<|=|<=|>=|>)([^<>=]+)', query.conds[idx]):
+            print('Invalid Operators')
+            return -1 
+
+        lhs = re.sub(r'(.+)(<|=|<=|>=|>)(.+)', r'\1', query.conds[idx])
+        lhs = lhs.strip()    
+        opr = re.sub(r'(.+)(<|=|<=|>=|>)(.+)', r'\2', query.conds[idx])
+        opr = opr.strip()    
+        rhs = re.sub(r'(.+)(<|=|<=|>=|>)(.+)', r'\3', query.conds[idx])
+        rhs = rhs.strip()
+
+        val = 0
+        tabs = ''
+        if type(rhs) is int:
+            rhs = int(rhs)
+            val = 1
+
+        if not re.match(r'(.+)\.(.+)', lhs):
+            condL = lhs
+            count = 0
+            for t in query.tables:
+                if lhs in self.tabs[t].columns:
+                    count += 1
+                    tabs = t
+            if count == 0:
+                print('Column ' + condL + ' does not exist')
+                return -1
+        else:
+            tabs = re.sub(r'(.+)\.(.+)', r'\1', lhs)
+            condL = re.sub(r'(.+)\.(.+)', r'\2', lhs)
+        
+        index = []
+        
+        if val == 0:
+            leftTab = tabs
+            rightTab = ''
+            leftCo = condL
+            if not re.match(r'(.+)\.(.+)', rhs):
+                count = 0
+                rightCo = rhs
+                for t in query.tables:
+                    if rightCo not in self.tabs[t].columns:
+                        continue
+                    else:
+                        rightTab = t
+                        count += 1
+                if count == 0:
+                    print('column ' + rightTab + ' does not exist' )
+                    return -1        
+            else:
+                rightTab = re.sub(r'(.+)\.(.+)', r'\1', rhs)
+                rightCo = re.sub(r'(.+)\.(.+)', r'\2', rhs)    
+            
+            if rightTab not in self.tabs:
+                print('Table ' + rightTab + ' does not exist')
+                return -1
+            if rightCo not in self.tabs[rightTab].attributes:
+                print('Column ' + rightCo + ' does not exist')
+                return -1
+            countL = 0
+            num = 1
+            for i in query.tables:
+                num *= self.tabs[i].num
+            for i in self.tabs[leftTab].attributes:
+                if i != leftCo:
+                    countL += 1
+                else:
+                    break
+            countR = 0
+            for i in self.tabs[rightTab].attributes:
+                if i != rightCo:
+                    countR += 1
+                else:
+                    break        
+            for i in range(num):
+                if self.resolveOpr(self.outable[i][self.tn[leftTab]][countL],self.outable[i][self.tn[rightTab]][countR],opr):
+                    index.append(i)
+
+
+
+
+        else:    
+            cnt = 0
+            num = 1
+            for t in query.tables:
+                num *= self.tabs[t].num
+            for t in self.tabs[tabs].attr:
+                if t != condL:
+                    cnt += 1
+                else:
+                    break
+            for i in range(num):
+                if self.resolveOpr(self.outable[i][self.tn[tabs]][cnt],rhs,opr):
+                    index.append(i)
+
+
+        return index
+
+
+
+
+    
+    
+    
+    
+    
+    def retTables(self, table):
         return self.tabs[table].rows        
+    
+    
     def minisqlengine(self):
         while 1:
             q = input('miniSQLEngine>>')
@@ -91,13 +305,16 @@ class SqlEngine():
                 if flg == 0:
                     continue
                 flag = 0    
+                count = 0
                 for j in query.tables:
                     if j not in self.tabs:
                         flag = 1
                         print('Table not found')
+                    self.tn[i] = count
+                    count += 1    
                 if flag == 1:
                     continue
-                for j in product(*map(self.retrieveTables,query.tables)):
+                for j in product(*map(self.retTables,query.tables)):
                     self.outable.append(j)
                 # for t in self.outable:
                 #     print(t)    
@@ -105,6 +322,9 @@ class SqlEngine():
                     self.outcols.append(self.tabs[t].attributes)  
                 # for t in self.outcols:
                 #     print(t)
+                self.id = []
+                self.proc(flag, query)
+
 
 
 class Query():
@@ -119,8 +339,11 @@ class Query():
         # line = line.strip() isko baad me uncomment karna hai
         # print('bt')
         patt = ['select', 'from']
+        # print('baka1')
+        line = self.line.split(' ')
         for p in patt:
-            if not re.search(p,self.line,re.IGNORECASE):
+            # print(p,self.line)
+            if p not in line:
                 print('Error in syntax')
                 return 0
 
@@ -189,6 +412,7 @@ class Tab():
         self.attributes = []
         self.rows =  []
         self.columns = {}
+        self.num = 0
 
 
 
