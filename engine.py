@@ -9,8 +9,8 @@ class SqlEngine():
         self.tables = []
         self.tabs = {}
         self.tn = {}
-        self.outable=[]
-        self.outcols = []
+        # self.outable=[]
+        # self.outcols = []
         self.readMetadata()
         self.readTables()
 
@@ -131,6 +131,7 @@ class SqlEngine():
             for cols in prcsdCols:
                 col = re.sub(r'(.+)\.(.+)', r'\2', cols)
                 tab = re.sub(r'(.+)\.(.+)', r'\1', cols)
+                # print(tab)
                 if tab not in self.tabs:
                     print('Table ' + tab + ' does not exist')
                     return
@@ -139,7 +140,7 @@ class SqlEngine():
                     return
                 
                 cnt = 0
-                for j in self.tabls[tab].attributes:
+                for j in self.tabs[tab].attributes:
                     if j != col:
                         cnt += 1
                     else:
@@ -153,6 +154,8 @@ class SqlEngine():
     
     def proCols(self,query):
         prcsdCols = []
+        # for p in query.cols:
+        #     print(p)
         if '*' not in query.cols:
             for cols in query.cols:
                 if not re.match(r'.+\..+', cols):
@@ -167,12 +170,15 @@ class SqlEngine():
                         print('Column ' + cols + ' does not exist' )
                         return -1        
                 else:
-                    prcsdCols += cols
+                    prcsdCols.append(cols)
         else:
             query.cols = []
             for t in query.tables:
-                prcsdCols.append([ t + '.' + x for x in self.tabs[t].attributes])
+                prcsdCols  += ([ t + '.' + x for x in self.tabs[t].attributes])
         
+        # print('baka')
+        # for p in prcsdCols:
+        #     print(p)
         return prcsdCols
 
     def procAgg(self,query):
@@ -299,6 +305,8 @@ class SqlEngine():
                 break
             quer = q.split(';')
             for i in range(len(quer)):
+                self.outable = []
+                self.outcols = []
                 quer[i] = quer[i] + ';'
                 query = Query(quer[i])
                 flg = query.parse()
@@ -310,12 +318,14 @@ class SqlEngine():
                     if j not in self.tabs:
                         flag = 1
                         print('Table not found')
-                    self.tn[i] = count
+                    self.tn[j] = count
                     count += 1    
                 if flag == 1:
                     continue
+                # print(flag)
                 for j in product(*map(self.retTables,query.tables)):
                     self.outable.append(j)
+                del self.outable[::2]    
                 # for t in self.outable:
                 #     print(t)    
                 for t in query.tables:
@@ -323,7 +333,7 @@ class SqlEngine():
                 # for t in self.outcols:
                 #     print(t)
                 self.id = []
-                self.proc(flag, query)
+                self.proc(flg, query)
 
 
 
@@ -346,11 +356,14 @@ class Query():
             if p not in line:
                 print('Error in syntax')
                 return 0
-
+        
+        cols = re.sub(r'^(select\ )(.+)(\ from\ ).+[;]$', r'\2' , self.line, re.IGNORECASE).split(',')
+        for col in cols:
+            self.cols.append(col.strip())
         
         cond = re.search(r'(\where)[\ ]*$',self.line,re.IGNORECASE)
-        if cond:
-            print('Where condition is not provided')
+        # if not cond:
+        #     print('Where condition is not provided')
         
         if re.search(r'(\ where\ )',self.line, re.IGNORECASE):
             tables = re.sub(r'^(select\ ).+(\ from\ )(.+)(\ where\ )(.+)[;]$', r'\3' , self.line,flags = re.IGNORECASE)
@@ -397,6 +410,7 @@ class Query():
                 self.conditions.append(conds)
                 return 2
         else:
+            # print('baka')
             tables = re.sub(r'^(select\ ).+(\ from\ )(.+)[;]$', r'\3' , self.line,flags = re.IGNORECASE)        
             tables = tables.split(',')
             for t in tables:
