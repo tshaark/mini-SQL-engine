@@ -80,7 +80,7 @@ class SqlEngine():
             idx = range(num)
         elif flag == 2:
             val = self.procCond(0, query)
-            if val > -1:
+            if val != -1:
                 idx = val
             else:
                 return    
@@ -98,7 +98,7 @@ class SqlEngine():
                 rnge = (set(val1) & set(val2))
                 idx = list(rnge)    
         self.id = idx                               
-        if any(re.match(r'(distinct)', string, re.IGNORECASE) for string in query.cols):
+        if any(re.match(r'(distinct)', string,flags =  re.IGNORECASE) for string in query.cols):
             self.procDist(query)
             return
         elif any(re.match(r'.+\(.+\)', string) for string in query.cols):
@@ -122,6 +122,7 @@ class SqlEngine():
     
     def procRows(self,query):
         prcsdCols = self.proCols(query)
+        # print(prcsdCols)
         if prcsdCols == -1:
             return
 
@@ -129,6 +130,7 @@ class SqlEngine():
         for i in self.id:
             row = []
             for cols in prcsdCols:
+                # print(cols)
                 col = re.sub(r'(.+)\.(.+)', r'\2', cols)
                 tab = re.sub(r'(.+)\.(.+)', r'\1', cols)
                 # print(tab)
@@ -136,6 +138,7 @@ class SqlEngine():
                     print('Table ' + tab + ' does not exist')
                     return
                 if col not in self.tabs[tab].attributes:
+                    # print('vt')
                     print('Column ' + col + ' does not exist')
                     return
                 
@@ -157,6 +160,7 @@ class SqlEngine():
         # for p in query.cols:
         #     print(p)
         if '*' not in query.cols:
+            # print(query.cols)
             for cols in query.cols:
                 if not re.match(r'.+\..+', cols):
                     count = 0
@@ -167,12 +171,14 @@ class SqlEngine():
                         prcsdCols.append(tab + '.' + cols)
                         count += 1    
                     if count == 0:
+                        # print('vt')
                         print('Column ' + cols + ' does not exist' )
                         return -1        
                 else:
                     prcsdCols.append(cols)
         else:
             query.cols = []
+            # print(query.tables)
             for t in query.tables:
                 prcsdCols  += ([ t + '.' + x for x in self.tabs[t].attributes])
         
@@ -182,52 +188,147 @@ class SqlEngine():
         return prcsdCols
 
     def procAgg(self,query):
-        pass
+        ptable = PrettyTable(query.cols)
+        rw = []
+        for c in query.cols:
+            tb = ''
+            att = re.sub(r'.+\((.+)\)', r'\1', c)
+            att = att.strip()
+            fnc = re.sub(r'\(.+\)','',c)
+            if not re.match(r'.+\..+',att):
+                count = 0
+                col = att
+                for t in query.tables:
+                    if att not in self.tabs[t].columns:
+                        continue
+                    tb = t
+                    count += 1
+                if not count:
+                    print('column not  found')
+                    return
+            else:
+                col = re.sub(r'(.+)\.(.+)', r'\2', att)
+                tb = re.sub(r'(.+)\.(.+)', r'\1', att)
+
+            if col not in self.tabs[tb].attributes:
+                print('Column ' + col + ' does not exist')
+                return            
+
+            if tb not in self.tabs:
+                print('Table ' + tb + ' does not exist')
+                return
+            cnt = 0
+            for i in self.tabs[tb].attributes:
+                if i != col:
+                    cnt += 1
+                else:
+                    break
+            somenum = sys.maxsize
+            # print(somenum)
+            if re.match(r'(avg)',fnc, flags = re.IGNORECASE) or re.match(r'(sum)',fnc, flags = re.IGNORECASE):
+                sm = 0
+                for i in self.id:
+                    sm +=  self.outable[i][self.tn[tb]][cnt]
+                if re.match(r'(avg)',fnc, flags = re.IGNORECASE):
+                    sm /= len(self.id)
+            elif re.match(r'(min)',fnc, flags = re.IGNORECASE):
+                sm = somenum
+                for i in self.id:
+                    sm = min(sm,self.outable[i][self.tn[tb]][cnt])
+                if not self.id:
+                    sm =''    
+            
+            elif re.match(r'(max)',fnc, flags = re.IGNORECASE):
+                sm = -somenum - 1
+                # print(self.id)
+                # if not self.id:
+                #     print(No such value)
+
+                for i in self.id:
+                    # print(self.outable[i][self.tn[tb]][cnt])
+                    sm = max(sm,self.outable[i][self.tn[tb]][cnt])
+                if not self.id:
+                    sm =''            
+
+
+            # if re.match(r'(avg)',fnc, flags = re.IGNORECASE) or re.match(r'(sum)',fnc, flags = re.IGNORECASE):
+            #     sm = 0
+            #     for i in self.id:
+            #         sm +=  self.outable[i][self.tn[tb]][cnt]
+            #     if re.match(r'(avg)',fnc, flags = re.IGNORECASE):
+            #         sm /= len(self.id)
+            # elif re.match(r'(min)',fnc, flags = re.IGNORECASE):
+            #     sm = somenum 
+            #     for i in self.id:
+            #         sm = min(sm,self.outable[i][self.tn[tb]][cnt])   
+            # elif re.match(r'(max)',fnc, flags = re.IGNORECASE):
+            #     sm = -somenum - 1
+            #     for i in self.id:
+            #         sm = max(sm,self.outable[i][self.tn[tb]][cnt]        
+            rw.append(sm)
+        ptable.add_row(rw)
+        print(ptable)    
     def procDist(self,query):
         pass
     
     
     def procCond(self, idx, query):
-        if not re.match(r'([^<>=]+)(<|=|<=|>=|>)([^<>=]+)', query.conds[idx]):
+        if not re.match(r'([^<>=]+)(<|=|<=|>=|>)([^<>=]+)', query.conditions[idx]):
             print('Invalid Operators')
             return -1 
-
-        lhs = re.sub(r'(.+)(<|=|<=|>=|>)(.+)', r'\1', query.conds[idx])
+        # print(query.conditions)
+        lhs = re.sub(r'(.+)(<|=|<=|>=|>)(.+)', r'\1', query.conditions[idx])
         lhs = lhs.strip()    
-        opr = re.sub(r'(.+)(<|=|<=|>=|>)(.+)', r'\2', query.conds[idx])
+        opr = re.sub(r'(.+)(<|=|<=|>=|>)(.+)', r'\2', query.conditions[idx])
         opr = opr.strip()    
-        rhs = re.sub(r'(.+)(<|=|<=|>=|>)(.+)', r'\3', query.conds[idx])
+        rhs = re.sub(r'(.+)(<|=|<=|>=|>)(.+)', r'\3', query.conditions[idx])
         rhs = rhs.strip()
-
+        # print(lhs,rhs,opr)
         val = 0
         tabs = ''
-        if type(rhs) is int:
+        # if type(rhs) is int:
+        #     rhs = int(rhs)
+        #     val = 1
+        # print(val)
+        try:
             rhs = int(rhs)
             val = 1
-
+        except ValueError:
+            val = 0
         if not re.match(r'(.+)\.(.+)', lhs):
             condL = lhs
             count = 0
             for t in query.tables:
-                if lhs in self.tabs[t].columns:
+                if condL in self.tabs[t].columns:
                     count += 1
                     tabs = t
             if count == 0:
+                # print('baka')
                 print('Column ' + condL + ' does not exist')
                 return -1
+            if count > 1:
+                return -1    
         else:
+            # print('btbt')
             tabs = re.sub(r'(.+)\.(.+)', r'\1', lhs)
             condL = re.sub(r'(.+)\.(.+)', r'\2', lhs)
-        
+        # print(self.tabs,self.tabs[tabs].attributes)
+        if tabs not in self.tabs:
+            # print(bt1)
+            return -1
+        if condL not in self.tabs[tabs].attributes:
+            # print(bt1)
+            return -1        
         index = []
         
-        if val == 0:
+        if not val:
             leftTab = tabs
             rightTab = ''
             leftCo = condL
             if not re.match(r'(.+)\.(.+)', rhs):
                 count = 0
                 rightCo = rhs
+                # print(rightCo)
                 for t in query.tables:
                     if rightCo not in self.tabs[t].columns:
                         continue
@@ -236,21 +337,31 @@ class SqlEngine():
                         count += 1
                 if count == 0:
                     print('column ' + rightTab + ' does not exist' )
-                    return -1        
+                    # return -1   
+                if count > 1:
+                    # print('same column '+ rightCo + ' in 2 or more tables.')
+                    return -1     
             else:
+                # print('btbtbtb')
                 rightTab = re.sub(r'(.+)\.(.+)', r'\1', rhs)
                 rightCo = re.sub(r'(.+)\.(.+)', r'\2', rhs)    
             
+            # print(rightTab)
+            
             if rightTab not in self.tabs:
+                # print('baka')
                 print('Table ' + rightTab + ' does not exist')
                 return -1
+            # print(self.tabs[rightTab].attributes)
             if rightCo not in self.tabs[rightTab].attributes:
+                # print('baka')
                 print('Column ' + rightCo + ' does not exist')
                 return -1
             countL = 0
             num = 1
             for i in query.tables:
                 num *= self.tabs[i].num
+            
             for i in self.tabs[leftTab].attributes:
                 if i != leftCo:
                     countL += 1
@@ -274,7 +385,7 @@ class SqlEngine():
             num = 1
             for t in query.tables:
                 num *= self.tabs[t].num
-            for t in self.tabs[tabs].attr:
+            for t in self.tabs[tabs].attributes:
                 if t != condL:
                     cnt += 1
                 else:
@@ -304,7 +415,7 @@ class SqlEngine():
             if q == 'quit':
                 break
             quer = q.split(';')
-            for i in range(len(quer)):
+            for i in range(len(quer)-1):
                 self.outable = []
                 self.outcols = []
                 quer[i] = quer[i] + ';'
@@ -342,30 +453,34 @@ class Query():
         self.tables = []
         self.cols = []
         self.conds=[]
-        self.line = line
+        self.line = line.strip()
         self.flag = 1
         self.conditions = []
     def parse(self):
         # line = line.strip() isko baad me uncomment karna hai
         # print('bt')
-        patt = ['select', 'from']
-        # print('baka1')
-        line = self.line.split(' ')
-        for p in patt:
-            # print(p,self.line)
-            if p not in line:
-                print('Error in syntax')
-                return 0
-        
-        cols = re.sub(r'^(select\ )(.+)(\ from\ ).+[;]$', r'\2' , self.line, re.IGNORECASE).split(',')
+        # patt = ['select', 'from']
+        # # print('baka1')
+        # line = self.line.split(' ')
+        # for p in patt:
+        #     # print(p,self.line)
+        #     if p not in line:
+        #         print('Error in syntax')
+        #         return 0
+        if not re.match(r'^(select\ ).+(\ from\ ).+[;]$', self.line, flags = re.IGNORECASE):
+            print('Error in syntax.')
+            return 0
+
+
+        cols = re.sub(r'^(select\ )(.+)(\ from\ ).+[;]$', r'\2' , self.line,flags =  re.IGNORECASE).split(',')
         for col in cols:
             self.cols.append(col.strip())
-        
-        cond = re.search(r'(\where)[\ ]*$',self.line,re.IGNORECASE)
+        # print(self.cols)
+        cond = re.search(r'(\where)[\ ]*$',self.line,flags = re.IGNORECASE)
         # if not cond:
         #     print('Where condition is not provided')
         
-        if re.search(r'(\ where\ )',self.line, re.IGNORECASE):
+        if re.search(r'(\ where\ )',self.line, flags = re.IGNORECASE):
             tables = re.sub(r'^(select\ ).+(\ from\ )(.+)(\ where\ )(.+)[;]$', r'\3' , self.line,flags = re.IGNORECASE)
             tables = tables.split(',')
             for t in tables:
@@ -379,7 +494,7 @@ class Query():
         
             
 
-            if re.search(r'(\ or\ )',conds,re.IGNORECASE):
+            if re.search(r'(\ or\ )',conds,flags = re.IGNORECASE):
                 conds = re.sub(r'^(.+)(or)(.+)$', r'\1 or \3',conds,flags = re.IGNORECASE)
                 
                 # for con in conds:
@@ -394,7 +509,7 @@ class Query():
                 return 3
             
             
-            elif re.search(r'(\ and\ )',conds,re.IGNORECASE):
+            elif re.search(r'(\ and\ )',conds,flags = re.IGNORECASE):
                 conds = re.sub(r'^(.+)(and)(.+)$', r'\1 and \3',conds,flags = re.IGNORECASE)
                 conds = conds.split('and')
                 # print('baka')
