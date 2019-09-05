@@ -99,6 +99,8 @@ class SqlEngine():
                 idx = list(rnge)    
         self.id = idx                               
         if any(re.match(r'(distinct)', string,flags =  re.IGNORECASE) for string in query.cols):
+            # print(query.cols)
+            query.cols[0] = query.cols[0].split()[1]
             self.procDist(query)
             return
         elif any(re.match(r'.+\(.+\)', string) for string in query.cols):
@@ -188,6 +190,7 @@ class SqlEngine():
         return prcsdCols
 
     def procAgg(self,query):
+        # print(query.cols)
         ptable = PrettyTable(query.cols)
         rw = []
         for c in query.cols:
@@ -268,8 +271,111 @@ class SqlEngine():
             rw.append(sm)
         ptable.add_row(rw)
         print(ptable)    
+    
     def procDist(self,query):
-        pass
+        # print(query.cols)
+        # n = len(query.cols) 
+        # if n > 1:
+        #     print('Distinct can only be used with 1 column')
+        #     return
+
+        prcsdCols = self.proCols(query)
+        print(prcsdCols)
+        if prcsdCols == -1:
+            return
+        dist = {}
+        ptable = PrettyTable(prcsdCols)
+        dist =[]
+        flag = 0
+        idx= 0
+        for i in self.id:
+            row = []
+            for cols in prcsdCols:
+                # print(cols)
+                col = re.sub(r'(.+)\.(.+)', r'\2', cols)
+                tab = re.sub(r'(.+)\.(.+)', r'\1', cols)
+                # print(tab)
+                if tab not in self.tabs:
+                    print('Table ' + tab + ' does not exist')
+                    return
+                if col not in self.tabs[tab].attributes:
+                    # print('vt')
+                    print('Column ' + col + ' does not exist')
+                    return
+                
+                cnt = 0
+                for j in self.tabs[tab].attributes:
+                    if j != col:
+                        cnt += 1
+                    else:
+                        break    
+                
+                row.append(self.outable[i][self.tn[tab]][cnt])
+            if row not in dist:
+                dist.append(row)
+                flag = 1
+            if flag:
+                ptable.add_row(row)
+                flag = 0
+        print(ptable)
+
+
+
+
+
+
+
+        # tb =''
+        # ptable = PrettyTable(query.cols)
+        # # col.strip()
+        # # for col in query.cols:
+        # # col = re.sub("\' '", ",", query.strip())
+        # col = re.sub(r'.+\((.+)\)', r'\1',query.cols[0])
+        # col = col.strip()
+        # # print(col)
+        # if not re.match(r'.+\..+',col):
+        #     count = 0
+        #     c = col
+        #     for t in query.tables:
+        #         if c not in self.tabs[t].columns:
+        #             continue
+        #         tb = t
+        #         count += 1
+        #     if count == 0:
+        #         print('Column '+ c +'does not exist')
+        #         return
+        #     if count > 1:
+        #         print('Column error')
+        #         return 
+        # else:
+        #     c = re.sub(r'(.+)\.(.+)', r'\2', col)
+        #     tb = re.sub(r'(.+)\.(.+)', r'\1', col)
+        # if tb not in self.tabs:
+        #     print('Table error')
+        #     return
+        # if c not in self.tabs[tb].attributes:
+        #     print('Column error')
+        #     return
+        # cnt = 0
+        # dist = {}
+        # for i in self.tabs[tb].attributes:
+        #     if i != c:
+        #         cnt += 1
+        #         continue
+        #     break
+
+        # for i in self.id:
+        #     t = self.outable[i][self.tn[tb]][cnt]
+        #     rw = []
+        #     if t not in dist:
+        #         rw.append(t)
+        #         dist[t] = 1
+        #     if rw:
+        #         ptable.add_row(rw)
+        # print(ptable)            
+
+
+
     
     
     def procCond(self, idx, query):
@@ -467,13 +573,16 @@ class Query():
         #     if p not in line:
         #         print('Error in syntax')
         #         return 0
+        
         if not re.match(r'^(select\ ).+(\ from\ ).+[;]$', self.line, flags = re.IGNORECASE):
             print('Error in syntax.')
             return 0
 
 
-        cols = re.sub(r'^(select\ )(.+)(\ from\ ).+[;]$', r'\2' , self.line,flags =  re.IGNORECASE).split(',')
+        # cols = re.sub(r'^(select\ )(.+)(\ from\ ).+[;]$', r'\2' , self.line,flags =  re.IGNORECASE).split(',')
+        cols = re.sub(r'^(?i)(select\ )(.+)(?i)(\ from\ ).+[;]$', r'\2' , self.line).split(',')
         for col in cols:
+            # print(col)
             self.cols.append(col.strip())
         # print(self.cols)
         cond = re.search(r'(\where)[\ ]*$',self.line,flags = re.IGNORECASE)
